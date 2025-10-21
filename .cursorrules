@@ -1,0 +1,200 @@
+# Cursor Rules — Admin Mock (React + MUI + TS + Zustand + Zod)
+
+These rules guide Cursor (Agent & Auto) to generate production‑ready code for the **Admin Mock** project.
+
+---
+
+## 0) Project Context
+
+* **Goal:** Responsive Admin interface managing hierarchical entities (Clubs → Sports → Teams → Users and Pitches → Cameras).
+* **Stack:** React 18, TypeScript, MUI v5/6, Zustand (state), Zod (validation), Vite (build).
+* **Data:** In‑memory fixtures (`fixtures.ts`) accessed through a single `adminApi.ts` layer.
+
+---
+
+## 1) Architecture & Directory Rules
+
+**Always follow this layout:**
+
+```
+src/
+  app/                → App root, theme, and routing
+  layout/             → Responsive shells (Desktop, Tablet, Mobile)
+  features/admin/     → All Admin‑specific components, hooks, models, and store
+  shared/             → Cross‑feature UI + utilities
+```
+
+### Must‑Have Files
+
+* `layout/ResponsiveLayout.tsx` chooses shell by breakpoint.
+* `features/admin/store/adminStore.ts` holds all state.
+* `features/admin/hooks/useAdminController.ts` orchestrates logic.
+* `features/admin/components/CreateEditForm.tsx` uses **Zod** schemas.
+* `features/admin/api/adminApi.ts` and `fixtures.ts` simulate persistence.
+
+---
+
+## 2) Component & Code Standards
+
+* Use **function components** and **explicit prop types** (`Props` interfaces).  No `any`.
+* Use **arrow functions** and hooks; avoid class components.
+* Split presentation and logic:
+
+  * Logic → hooks (`useAdminController`, `useResponsiveNodePath`)
+  * UI → components (`EntityList`, `DetailsPanel`, `TreeNav`, etc.)
+* Name booleans `isX`, `hasX`, `canX`.
+* Name store actions imperatively (`setX`, `openX`, `closeX`).
+
+---
+
+## 3) State Management (Zustand)
+
+All Admin UI state resides in `adminStore.ts`. Example signature:
+
+```ts
+type AdminState = {
+  path: Path;
+  kind: 'users'|'teams'|'pitches'|'cameras';
+  items: ListItemVM[];
+  total: number;
+  selection: Id[];
+  query: string;
+  page: number;
+  pageSize: number;
+  detailsOpen: boolean;
+  currentId?: Id;
+
+  setPath(next: Partial<Path>): void;
+  setKind(kind: AdminState['kind']): void;
+  setSelection(ids: Id[]): void;
+  setQuery(q: string): void;
+  openDetails(id: Id): void;
+  closeDetails(): void;
+  load(): Promise<void>;
+  save(patch: Partial<AnyEntity>): Promise<void>;
+  create(kind: EntityKind, payload: Partial<AnyEntity>): Promise<void>;
+  remove(ids: Id[]): Promise<void>;
+  bulkChangeRole(ids: Id[], role: 'tenant_admin'|'member'): Promise<void>;
+}
+```
+
+Selectors must use `useAdminStore(s => s.field)` pattern to prevent re‑renders.
+
+---
+
+## 4) Responsive Layout Rules
+
+* `ResponsiveLayout.tsx` chooses **DesktopShell**, **TabletShell**, or **MobileShell** using MUI `useMediaQuery`.
+* Do **not** branch UI within feature components. The layout decides structure.
+* Breakpoints:
+
+  * **Desktop ≥1200px:** 3‑pane (Tree | List | Details fixed)
+  * **Tablet 768–1199px:** 2‑pane (Tree | List, Details drawer)
+  * **Mobile ≤767px:** Drill‑down + bottom sheet
+
+---
+
+## 5) UI Behavior (MUI)
+
+* Use **MUI components**; style via `sx` prop or theme variants.
+* Lists: use `List`, `Table`, or `DataGrid` as appropriate.
+* Drawers: right‑side `Drawer` for desktop/tablet; `Dialog` with slide‑up for mobile.
+* Search inputs: `TextField` with debounced updates.
+* Show a floating “+ Add” (MUI FAB) for creation.
+* Snackbar for Undo after destructive actions.
+
+---
+
+## 6) API & Fixtures
+
+* All CRUD operations flow through `adminApi.ts`.
+* `fixtures.ts` holds initial in‑memory arrays for Clubs, Sports, Teams, Users, Pitches, Cameras.
+* Simulate latency with `await new Promise(r => setTimeout(r,150))`.
+
+---
+
+## 7) Validation (Zod)
+
+* Define one schema per entity in `schemas.ts`:
+
+```ts
+export const UserSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  role: z.enum(['tenant_admin','member']),
+});
+```
+
+* Forms must integrate via `useForm` or direct `zod` parse/issue helper text.
+
+---
+
+## 8) Accessibility
+
+* Keyboard: arrow keys navigate tree/list; Enter opens details; Esc closes dialog/drawer.
+* All icon buttons must have `aria-label`.
+* Maintain visible focus outlines; never disable focus ring.
+* Drawer/Dialog traps focus and restores on close.
+
+---
+
+## 9) Agent Prompts & Expectations
+
+### To create a component
+
+> "Create `features/admin/components/EntityList.tsx` using MUI Table. Props: `kind, items, selection, onRowClick, onSelectionChange, toolbar, bulkBar, loading, total, page, pageSize, onPageChange`. Implement checkbox selection, pagination, and row menu. No data fetching."
+
+### To wire the controller
+
+> "Implement `useAdminController.ts` that connects `adminStore` and `adminApi`, maps entities to `ListItemVM`, builds breadcrumbs from `path`, and exposes methods for details open/close, save, bulk actions."
+
+### To build API fixtures
+
+> "Populate `fixtures.ts` with 2 clubs, multiple sports/teams/users/pitches/cameras and implement `adminApi.ts` CRUD using arrays and promises."
+
+### To build layout shells
+
+> "Implement layout shells that arrange TreeNav, EntityList, and DetailsPanel differently per breakpoint, reusing identical children."
+
+---
+
+## 10) Quality Gates
+
+1. **Build passes** (`vite build` or `tsc --noEmit`).
+2. **No `any`**, **no implicit any**, **no unused vars**.
+3. **Responsive check:** desktop → tablet → mobile transitions.
+4. **A11y:** keyboard navigation, labels, focus handling.
+5. **Undo snackbar** works for delete/bulk delete.
+
+---
+
+## 11) Commit Guidelines
+
+Follow Conventional Commits:
+
+```
+feat(admin): add DetailsPanel for desktop/tablet
+fix(store): persist selection after reload
+refactor(layout): isolate ResponsiveLayout logic
+```
+
+---
+
+## 12) Do & Don’t Summary
+
+**Do:**
+
+* Keep components under 200 lines.
+* Use explicit prop types and functional composition.
+* Keep async ops in store or controller, not in UI.
+* Use theme spacing and typography tokens.
+
+**Don’t:**
+
+* Duplicate logic between shells.
+* Mix fetch logic in UI.
+* Disable outlines or rely on absolute positioning for layout.
+
+---
+
+**End of Cursor Rules**
